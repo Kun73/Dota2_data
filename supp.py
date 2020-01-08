@@ -9,26 +9,27 @@ import requests
 import json
 import pandas as pd
 
+
 def team_heros(team_id, ver_time):
     """Summary heros a team uses after a specific version
-    
+
     Args:
         team_id: team id of a Dota2 team, can get from https://www.opendota.com/
         ver_time: Unix timestamp when the patch is released, convert from https://www.unixtimestamp.com/
-    
+
     Returns:
-        A DataFrame containing heros and their ban/pick totals
+        Two DataFrames containing heros and their ban/pick totals
     """
     r = requests.get('https://api.opendota.com/api/teams/{}/matches'.format(team_id))
     match = json.loads(r.text)
     match_id = []
     for m in match:
-        if m['start_time'] > ver_time: # Unix timestamp, after 7.23
+        if m['start_time'] > ver_time:  # Unix timestamp
             match_id.append(m['match_id'])
     heros = json.loads(requests.get('https://api.opendota.com/api/heroes').text)
     for hero in heros:
-        hero.update({'pick_total':0,
-                     'ban_total':0})
+        hero.update({'pick_total': 0,
+                     'ban_total': 0})
     heros_own = {}
     heros_against = {}
     for i in range(len(heros)):
@@ -36,7 +37,7 @@ def team_heros(team_id, ver_time):
         heros_against[heros[i]['id']] = heros[i].copy()
 
     for mid in match_id:
-        match_data = json.loads(requests.get('https://api.opendota.com/api/matches/{}'.format(mid)).text) 
+        match_data = json.loads(requests.get('https://api.opendota.com/api/matches/{}'.format(mid)).text)
         # get the position of team_id
         # pos = 1: dire, pos = 0: radiant
         if match_data['dire_team']['team_id'] == team_id:
@@ -58,6 +59,60 @@ def team_heros(team_id, ver_time):
                     heros_against[s['hero_id']]['ban_total'] += 1
     own = pd.DataFrame(heros_own)
     against = pd.DataFrame(heros_against)
-    return [own.T, against.T]
+    return [own.T, against.T, len(match_id)]
 
-#m = team_heros(15, 1574812800)
+
+# m = team_heros(15, 1574812800)
+# VG:726228
+def team_match_summary(team_id, ver_time):
+    """summary match details of the team from ver_time
+
+    Args:
+        team_id: team id of a Dota2 team, can get from https://www.opendota.com/
+        ver_time: Unix timestamp when the patch is released, convert from https://www.unixtimestamp.com/
+
+    Returns:
+        A DataFrame [against, league, teamfight_total, gold_adv_10, xp_adv_10, win]
+
+    """
+    r = requests.get('https://api.opendota.com/api/teams/{}/matches'.format(team_id))
+    match = json.loads(r.text)
+    match_id = []
+    for m in match:
+        if m['start_time'] > ver_time:  # Unix timestamp
+            match_id.append(m['match_id'])
+    match_summary = []
+    for mid in match_id:
+        match_data = json.loads(requests.get('https://api.opendota.com/api/matches/{}'.format(mid)).text)
+        # get the position of team_id
+        # pos = 1: dire, pos = 0: radiant
+        temp = {}
+        if match_data['dire_team']['team_id'] == team_id:
+            pos = 1
+            temp['against'] = match_data['radiant_team']['name']
+        else:
+            pos = 0
+            temp['against'] = match_data['dire_team']['name']
+        temp['league'] = match_data['league']['name']
+        if match_data['teamfights'] is not None:
+            temp['teamfight_total'] = len(match_data['teamfights'])
+            if pos == 0:
+                temp['gold_adv_10'] = match_data['radiant_gold_adv'][10]
+                temp['xp_adv_10'] = match_data['radiant_xp_adv'][10]
+                temp['win'] = match_data['radiant_win']
+            else:
+                temp['gold_adv_10'] = -match_data['radiant_gold_adv'][10]
+                temp['xp_adv_10'] = -match_data['radiant_xp_adv'][10]
+                temp['win'] = not (match_data['radiant_win'])
+        else:
+            temp['teamfight_total'] = None
+            temp['gold_adv_10'] = None
+            temp['xp_adv_10'] = None
+            temp['win'] = None
+        match_summary.append(temp)
+    summary = pd.DataFrame(match_summary)
+    return summary
+
+
+# t = team_match_summary(726228, 1574812800)
+
