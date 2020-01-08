@@ -2,8 +2,12 @@
 
 * [example](https://medium.com/@waprin/python-and-dota2-analyzing-team-liquids-io-success-and-failure-7d44cc5979b2)
 
-* 
+## team_heros
 
-* 
+bp summaries of a Dota2 team.
 
-*
+## team_match_summary
+
+match summaries of a Dota2 team, include gold advantage and xp advantage at 10min, total number of teamfights, opponents, league name, and
+match result.
+
