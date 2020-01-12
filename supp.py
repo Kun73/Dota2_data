@@ -124,8 +124,9 @@ def team_pick_winrate(team_id, ver_time):
         ver_time: Unix timestamp when the patch is released, convert from https://www.unixtimestamp.com/
 
     Returns:
-        A DataFrame containing winrates among heros,
-        -1: this combination does not appear
+        A dict containing
+        winrates among heros, -1: this combination does not appear
+        heros_all: original nested dict
     """
     r = requests.get('https://api.opendota.com/api/teams/{}/matches'.format(team_id))
     match = json.loads(r.text)
@@ -147,8 +148,12 @@ def team_pick_winrate(team_id, ver_time):
     for i in range(len(heros1)):
         heros_all[heros1[i]['id']] = heros1[i].copy()
         heros_comb[heros2[i]['id']] = heros2[i].copy()
-        heros_all[heros1[i]['id']]['with'] = heros_comb
-    # store match data, avoid requesting match data repeatedly
+        heros_all[heros1[i]['id']]['with'] = {}
+
+    for hero_id in heros_all:
+        for key, value in heros_comb.items():
+            heros_all[hero_id]['with'][key] = value.copy()
+
     match_datas = []
     for mid in match_id:
         match_datas.append(json.loads(requests.get('https://api.opendota.com/api/matches/{}'.format(mid)).text))
@@ -183,12 +188,14 @@ def team_pick_winrate(team_id, ver_time):
                             heros_all[hero_id]['with'][hero_id_pick]['loss_total'] += 1
                 if flag:
                     break
+
     heros_name = []
     heros_id = []
     for hero in heros1:
         heros_name.append(hero['localized_name'])
         heros_id.append(hero['id'])
     winrate_table = pd.DataFrame(-1 * np.ones([len(heros_name), len(heros_name)]), columns=heros_name, index=heros_id)
+
     for h_id in heros_all:
         for hh_id in heros_all[h_id]['with']:
             if heros_all[h_id]['with'][hh_id]['pick_total'] != 0:
@@ -199,4 +206,4 @@ def team_pick_winrate(team_id, ver_time):
 
     winrate_table.index = heros_name
 
-    return winrate_table
+    return {'winrate_table': winrate_table, 'heros_all': heros_all}
