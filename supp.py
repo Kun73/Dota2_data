@@ -207,3 +207,84 @@ def team_pick_winrate(team_id, ver_time):
     winrate_table.index = heros_name
 
     return {'winrate_table': winrate_table, 'heros_all': heros_all}
+
+
+def league_bp(teams, league_id):
+    """bp summaries in a league
+
+    Args:
+        teams: list, team id of the Dota2 teams in that league
+        league_id: league id
+
+    Returns:
+        winrate table
+    """
+    matches = []
+    for team_id in teams:
+        t = json.loads(requests.get('https://api.opendota.com/api/teams/{}/matches'.format(team_id)).text)
+        for m in t:
+            if m['leagueid'] == league_id and m['match_id'] not in matches:
+                matches.append(m['match_id'])
+                time.sleep(0.1)
+    match_datas = []
+    for match_id in matches:
+        match_datas.append(json.loads(requests.get('https://api.opendota.com/api/matches/{}'.format(match_id)).text))
+        time.sleep(5)
+
+    heros1 = json.loads(requests.get('https://api.opendota.com/api/heroes').text)
+    heros2 = json.loads(requests.get('https://api.opendota.com/api/heroes').text)  # avoid referring in dict
+
+    for i in range(len(heros1)):
+        del heros1[i]['name'], heros1[i]['primary_attr'], heros1[i]['attack_type'], heros1[i]['legs']
+        del heros2[i]['name'], heros2[i]['primary_attr'], heros2[i]['attack_type'], heros2[i]['legs'], heros2[i][
+            'roles']
+        heros2[i].update({'pick_total': 0, 'win_total': 0, 'loss_total': 0})
+
+    heros_all = {}
+    heros_comb = {}
+    for i in range(len(heros1)):
+        heros_all[heros1[i]['id']] = heros1[i].copy()
+        heros_comb[heros2[i]['id']] = heros2[i].copy()
+        heros_all[heros1[i]['id']]['with'] = {}
+
+    for hero_id in heros_all:
+        for key, value in heros_comb.items():
+            heros_all[hero_id]['with'][key] = value.copy()
+
+    radiant_win_total = 0
+
+    for hero_id in heros_all:
+        for match_data in match_datas:
+            # pos = 1: dire, pos = 0: radiant
+            if match_data['radiant_win']:
+                radiant_win_total += 1
+
+            # bp: 22 list, containing bp data
+            bp = match_data['picks_bans']
+            pick_hero_id = []
+            for s in bp:
+                if s['is_pick']:
+                    pick_hero_id.append(s['hero_id'])
+                for hero_id_pick in pick_hero_id:
+                    heros_all[hero_id]['with'][hero_id_pick]['pick_total'] += 1
+                    if match_data['radiant_win']:
+                        heros_all[hero_id]['with'][hero_id_pick]['win_total'] += 1
+                    else:
+                        heros_all[hero_id]['with'][hero_id_pick]['loss_total'] += 1
+    heros_name = []
+    heros_id = []
+    for hero in heros1:
+        heros_name.append(hero['localized_name'])
+        heros_id.append(hero['id'])
+    winrate_table = pd.DataFrame(-1 * np.ones([len(heros_name), len(heros_name)]), columns=heros_name, index=heros_id)
+
+    for h_id in heros_all:
+        for hh_id in heros_all[h_id]['with']:
+            if heros_all[h_id]['with'][hh_id]['pick_total'] != 0:
+                winrate = heros_all[h_id]['with'][hh_id]['win_total'] / heros_all[h_id]['with'][hh_id]['pick_total']
+                hero1_name = heros_all[h_id]['localized_name']
+                hero2_id = heros_all[h_id]['with'][hh_id]['id']
+                winrate_table[hero1_name][hero2_id] = winrate
+
+    winrate_table.index = heros_name
+    return winrate_table
